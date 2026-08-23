@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>스프라이트 검수 — 엘디아 연대기</title>
+<style>
+  body { background:#14121f; color:#f2ecdd; font-family:"Malgun Gothic",sans-serif; margin:0; padding:20px; }
+  h1 { font-size:20px; color:#f2d251; margin:0 0 4px; }
+  p.sub { color:#a5a5b5; font-size:13px; margin:0 0 20px; }
+  .ctl { margin-bottom:20px; }
+  .ctl label { margin-right:16px; font-size:13px; }
+  .row { margin-bottom:26px; border-bottom:1px solid #283257; padding-bottom:16px; }
+  .row h2 { font-size:15px; color:#8fb8e8; margin:0 0 8px; }
+  .strip { display:flex; gap:10px; flex-wrap:wrap; }
+  .cell { text-align:center; }
+  .cell canvas { image-rendering:pixelated; background:#22203a; border:1px solid #3c4f82; display:block; }
+  .cell span { font-size:11px; color:#a5a5b5; display:block; margin-top:3px; }
+  .anim canvas { border-color:#f2d251; }
+</style>
+</head>
+<body>
+<h1>스프라이트 검수</h1>
+<p class="sub">48×48 원본을 확대해서 표시합니다. 게임 화면에서는 2배(96px)로 보입니다.</p>
+<div class="ctl">
+  <label>확대 <select id="zoom"><option>4</option><option selected>6</option><option>8</option><option>10</option></select>배</label>
+  <label><input type="checkbox" id="grid"> 격자</label>
+  <label><input type="checkbox" id="bg" checked> 어두운 배경</label>
+</div>
+<div id="out"></div>
+
+<script type="module">
+import { makeUnitSprites, PALETTE } from './src/core/sprites.js';
+import { CHARACTERS, HERO_KITS } from './src/data/characters.js';
+import { ENEMIES } from './src/data/enemies.js';
+
+const POSES = (s) => [
+  ['대기0', s.idle.right[0]], ['대기1', s.idle.right[1]],
+  ['공격1 예비', s.attackFrames.right[0]], ['공격2 스윙', s.attackFrames.right[1]],
+  ['공격3 임팩트', s.attackFrames.right[2]], ['공격4 잔심', s.attackFrames.right[3]],
+  ['시전', s.cast.right], ['피격', s.hurt.right], ['쓰러짐', s.down.right],
+  ['정면(필드)', s.idle.down[0]], ['후면(필드)', s.idle.up[0]],
+];
+
+function resolve(cfg) {
+  const o = {};
+  for (const [k, v] of Object.entries(cfg)) o[k] = (typeof v === 'string' && PALETTE[v]) ? PALETTE[v] : v;
+  return o;
+}
+
+const units = [];
+for (const [k, kit] of Object.entries(HERO_KITS)) {
+  units.push({ name: `주인공 · ${({sword:'검사',mage:'마법사',archer:'궁수'})[k]}`, cfg: kit.spriteCfg });
+}
+for (const c of Object.values(CHARACTERS)) {
+  if (!c.isHero) units.push({ name: `${c.name} (${c.classKey})`, cfg: c.spriteCfg });
+}
+for (const e of Object.values(ENEMIES)) units.push({ name: `[적] ${e.name}`, cfg: e.spriteCfg });
+
+function draw() {
+  const zoom = +document.getElementById('zoom').value;
+  const showGrid = document.getElementById('grid').checked;
+  const dark = document.getElementById('bg').checked;
+  const out = document.getElementById('out');
+  out.innerHTML = '';
+  for (const u of units) {
+    const set = makeUnitSprites(resolve(u.cfg));
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<h2>${u.name}</h2>`;
+    const strip = document.createElement('div');
+    strip.className = 'strip';
+    // 애니메이션 미리보기
+    const animCell = document.createElement('div');
+    animCell.className = 'cell anim';
+    const ac = document.createElement('canvas');
+    ac.width = ac.height = 48 * zoom;
+    animCell.appendChild(ac);
+    animCell.insertAdjacentHTML('beforeend', '<span>움직임</span>');
+    strip.appendChild(animCell);
+    const seq = [...set.idle.right, ...set.attackFrames.right, set.hurt.right];
+    let fi = 0;
+    const actx = ac.getContext('2d');
+    setInterval(() => {
+      actx.imageSmoothingEnabled = false;
+      actx.clearRect(0, 0, ac.width, ac.height);
+      actx.fillStyle = dark ? '#22203a' : '#d5d2dc';
+      actx.fillRect(0, 0, ac.width, ac.height);
+      actx.drawImage(seq[fi % seq.length], 0, 0, ac.width, ac.height);
+      fi++;
+    }, 220);
+
+    for (const [label, img] of POSES(set)) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 48 * zoom;
+      const x = cv.getContext('2d');
+      x.imageSmoothingEnabled = false;
+      x.fillStyle = dark ? '#22203a' : '#d5d2dc';
+      x.fillRect(0, 0, cv.width, cv.height);
+      x.drawImage(img, 0, 0, cv.width, cv.height);
+      if (showGrid) {
+        x.strokeStyle = 'rgba(255,255,255,0.12)';
+        for (let i = 0; i <= 48; i += 8) {
+          x.beginPath(); x.moveTo(i * zoom, 0); x.lineTo(i * zoom, cv.height); x.stroke();
+          x.beginPath(); x.moveTo(0, i * zoom); x.lineTo(cv.width, i * zoom); x.stroke();
+        }
+      }
+      cell.appendChild(cv);
+      cell.insertAdjacentHTML('beforeend', `<span>${label}</span>`);
+      strip.appendChild(cell);
+    }
+    row.appendChild(strip);
+    out.appendChild(row);
+  }
+}
+for (const id of ['zoom', 'grid', 'bg']) document.getElementById(id).addEventListener('change', () => location.reload());
+draw();
+</script>
+</body>
+</html>
